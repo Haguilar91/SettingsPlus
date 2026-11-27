@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Settings Plus
+Comment=GNOME settings missing from Settings and Tweaks
+Exec=@PYTHON@ %h/.local/share/settings-plus/settings_plus.py
+Icon=io.github.settingsplus
+Categories=GNOME;GTK;Settings;
