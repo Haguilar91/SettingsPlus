@@ -1,0 +1,5 @@
+#!/bin/sh
+# AppImage entry point. The image bundles only the app: GTK 4, libadwaita and
+# PyGObject come from the host system (GNOME 46+ or equivalent).
+APPDIR=${APPDIR:-$(dirname "$(readlink -f "$0")")}
+exec "$APPDIR/usr/bin/settings-plus" "$@"

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.settingsplus</id>
+  <name>Settings Plus</name>
+  <summary>The GNOME settings that Settings and Tweaks leave out</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer id="io.github.haguilar91">
+    <name>Hector Aguilar</name>
+  </developer>
+  <description>
+    <p>
+      Settings Plus is a GTK 4 and libadwaita app that adds the options GNOME
+      Settings and Tweaks do not offer, bringing GNOME closer to KDE Plasma.
+      Pages are only shown when the matching feature is available on your system.
+    </p>
+    <ul>
+      <li>Power: lid switch, power button and idle behaviour</li>
+      <li>Keyboard shortcuts: custom shortcuts and launchers</li>
+      <li>Appearance: themes, icons, cursors and sounds</li>
+      <li>Startup applications</li>
+      <li>Login screen (GDM) settings</li>
+      <li>Date, region, privacy, accessibility and default applications</li>
+    </ul>
+    <p>
+      Changes that need administrator rights are applied through polkit and are
+      never made without your confirmation.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.settingsplus.desktop</launchable>
+  <url type="homepage">https://github.com/haguilar91/SettingsPlus</url>
+  <url type="bugtracker">https://github.com/haguilar91/SettingsPlus/issues</url>
+  <url type="vcs-browser">https://github.com/haguilar91/SettingsPlus</url>
+  <content_rating type="oars-1.1"/>
+  <branding>
+    <color type="primary" scheme_preference="light">#99c1f1</color>
+    <color type="primary" scheme_preference="dark">#1a5fb4</color>
+  </branding>
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <control>touch</control>
+  </supports>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Power settings</caption>
+      <image>https://raw.githubusercontent.com/haguilar91/SettingsPlus/main/docs/screenshots/power.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Keyboard shortcuts</caption>
+      <image>https://raw.githubusercontent.com/haguilar91/SettingsPlus/main/docs/screenshots/shortcuts.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Appearance</caption>
+      <image>https://raw.githubusercontent.com/haguilar91/SettingsPlus/main/docs/screenshots/appearance.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Login screen</caption>
+      <image>https://raw.githubusercontent.com/haguilar91/SettingsPlus/main/docs/screenshots/login-screen.png</image>
+    </screenshot>
+  </screenshots>
+  <releases>
+    <release version="0.1.0" date="2026-11-26">
+      <description>
+        <p>First release.</p>
+      </description>
+    </release>
+  </releases>
+</component>

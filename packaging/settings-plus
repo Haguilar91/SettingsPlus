@@ -1,0 +1,25 @@
+#!/bin/sh
+# Launcher for Settings Plus. Layout: <prefix>/bin/settings-plus and
+# <prefix>/share/settings-plus/settings_plus.py (Flatpak, Snap, AppImage,
+# /usr/local); inside the source tree it falls back to ../settings_plus.py.
+here=$(dirname "$(readlink -f "$0")")
+app="$here/../share/settings-plus/settings_plus.py"
+[ -f "$app" ] || app="$here/../settings_plus.py"
+if [ ! -f "$app" ]; then
+    echo "settings-plus: cannot find settings_plus.py next to $here" >&2
+    exit 1
+fi
+
+# Prefer the system python (it has PyGObject); other pythons such as
+# linuxbrew's usually do not.
+for py in /usr/bin/python3 "$(command -v python3 2>/dev/null)"; do
+    [ -n "$py" ] && [ -x "$py" ] || continue
+    if "$py" -c 'import gi' >/dev/null 2>&1; then
+        exec "$py" "$app" "$@"
+    fi
+done
+
+echo "settings-plus: no python3 with PyGObject found." >&2
+echo "Install python3-gi (Debian/Ubuntu), python-gobject (Arch) or python3-gobject (Fedora)," >&2
+echo "plus the GTK 4 and libadwaita typelibs (gir1.2-gtk-4.0, gir1.2-adw-1)." >&2
+exit 1

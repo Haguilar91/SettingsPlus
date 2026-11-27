@@ -31,6 +31,14 @@ import subprocess
 import sys
 import traceback
 
+APP_ID = "io.github.settingsplus"
+VERSION = "0.1.0"
+
+# Answer --version before importing GTK so it works without the typelibs.
+if __name__ == "__main__" and any(_a in ("--version", "-V") for _a in sys.argv[1:]):
+    print(f"Settings Plus {VERSION}")
+    sys.exit(0)
+
 try:
     import gi
 
@@ -71,11 +79,14 @@ def check_versions():
         sys.exit(1)
 
 
-APP_ID = "io.github.settingsplus"
-VERSION = "0.1.0"
 GLib.set_prgname(APP_ID)
 LOGIND_DROPIN = "/etc/systemd/logind.conf.d/50-settings-plus.conf"
-USER_AUTOSTART = os.path.join(GLib.get_user_config_dir(), "autostart")
+# Inside Flatpak, GLib.get_user_config_dir() points into the sandbox; the
+# autostart entries GNOME reads live in the real ~/.config.
+IN_FLATPAK = os.path.exists("/.flatpak-info")
+USER_AUTOSTART = os.path.join(
+    os.path.expanduser("~/.config") if IN_FLATPAK else GLib.get_user_config_dir(),
+    "autostart")
 SYSTEM_AUTOSTART = "/etc/xdg/autostart"
 GDM_PROFILE = "/etc/dconf/profile/gdm"
 GDM_DB_DIR = "/etc/dconf/db/gdm.d"
@@ -86,17 +97,44 @@ GDM_GREETER_DEFAULTS = "/usr/share/gdm/greeter-dconf-defaults"
 # --------------------------------------------------------------------------
 # helpers
 # --------------------------------------------------------------------------
+_HOST_TOOLS = {}
+
+
+def host_argv(argv):
+    """argv to run a command on the host (through flatpak-spawn when sandboxed)."""
+    argv = list(argv)
+    return ["flatpak-spawn", "--host"] + argv if IN_FLATPAK else argv
+
+
+def host_path(path):
+    """Path under which a host file is visible (/run/host/{usr,etc} in Flatpak)."""
+    if IN_FLATPAK and (path == "/usr" or path.startswith("/usr/")
+                       or path == "/etc" or path.startswith("/etc/")):
+        return "/run/host" + path
+    return path
+
+
 def have(tool):
-    return GLib.find_program_in_path(tool) is not None
+    if not IN_FLATPAK:
+        return GLib.find_program_in_path(tool) is not None
+    if tool not in _HOST_TOOLS:
+        try:
+            _HOST_TOOLS[tool] = subprocess.run(
+                host_argv(["sh", "-c", 'command -v "$1"', "sh", tool]),
+                capture_output=True, timeout=5).returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            _HOST_TOOLS[tool] = False
+    return _HOST_TOOLS[tool]
 
 
 def has_logind():
-    return os.path.isdir("/run/systemd/system") and have("pkexec") \
+    return os.path.isdir(host_path("/run/systemd/system")) and have("pkexec") \
         and have("systemctl")
 
 
 def has_gdm():
-    return any(os.path.isdir(p) for p in ("/usr/share/gdm", "/etc/gdm", "/etc/gdm3"))
+    return any(os.path.isdir(host_path(p))
+               for p in ("/usr/share/gdm", "/etc/gdm", "/etc/gdm3"))
 
 
 def get_settings(schema, key=None):
@@ -411,7 +449,7 @@ def _parse_keys(text, into):
 def _logind_conf_text():
     """Merged logind configuration text, lowest to highest precedence."""
     try:
-        out = subprocess.run(["systemd-analyze", "cat-config", "systemd/logind.conf"],
+        out = subprocess.run(host_argv(["systemd-analyze", "cat-config", "systemd/logind.conf"]),
                              capture_output=True, text=True, timeout=5)
         if out.returncode == 0 and out.stdout:
             return out.stdout
@@ -419,9 +457,10 @@ def _logind_conf_text():
         pass
     # Fallback without systemd-analyze: drop-ins override the main file, and
     # /etc drop-ins override same-named ones in /usr/lib.
-    paths = ["/etc/systemd/logind.conf"]
+    paths = [host_path("/etc/systemd/logind.conf")]
     dropins = {}
     for d in ("/usr/lib/systemd/logind.conf.d", "/etc/systemd/logind.conf.d"):
+        d = host_path(d)
         for p in glob.glob(os.path.join(d, "*.conf")):
             dropins[os.path.basename(p)] = p
     paths += [dropins[n] for n in sorted(dropins)]
@@ -473,7 +512,7 @@ def run_admin(script, stdin_text, callback):
     """
     try:
         proc = Gio.Subprocess.new(
-            ["pkexec", "sh", "-c", script],
+            host_argv(["pkexec", "sh", "-c", script]),
             Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
         )
     except GLib.Error as e:
@@ -759,7 +798,7 @@ class StartupPage(Page):
     # -- listing ------------------------------------------------------------
     def entries(self):
         found = {}
-        for d, system in ((SYSTEM_AUTOSTART, True), (USER_AUTOSTART, False)):
+        for d, system in ((host_path(SYSTEM_AUTOSTART), True), (USER_AUTOSTART, False)):
             if not os.path.isdir(d):
                 continue
             for fn in sorted(os.listdir(d)):
@@ -804,7 +843,7 @@ class StartupPage(Page):
     def on_toggle(self, sw, state, fn):
         src = os.path.join(USER_AUTOSTART, fn)
         if not os.path.exists(src):
-            src = os.path.join(SYSTEM_AUTOSTART, fn)
+            src = os.path.join(host_path(SYSTEM_AUTOSTART), fn)
         kf = load_entry(src)
         if kf is None:
             return False
@@ -922,7 +961,7 @@ class WorkspaceNamesGroup(Adw.PreferencesGroup):
 
 class DesktopPage(Page):
     def __init__(self, window):
-        super().__init__(title="Windows and Desktop", icon_name="preferences-desktop-symbolic")
+        super().__init__(title="Windows and Desktop", icon_name="focus-windows-symbolic")
         W = "org.gnome.desktop.wm.preferences"
         M = "org.gnome.mutter"
         I = "org.gnome.desktop.interface"
@@ -1514,11 +1553,12 @@ class ShortcutCaptureDialog(Adw.AlertDialog):
     looking for conflicts.
     """
 
-    def __init__(self, name, callback, exclude=None):
+    def __init__(self, name, callback, exclude=None, own=()):
         super().__init__(heading="Set shortcut",
                          body=f"Press the keys for “{name}”")
         ensure_keycap_css()
         self.callback, self.exclude = callback, exclude
+        self.own = [p for p in (parse_accel(a) for a in own) if p]
         self.pending = None   # (keyval, mods) of the captured combination
         self.conflicts = []
         self.result = None
@@ -1654,7 +1694,11 @@ class ShortcutCaptureDialog(Adw.AlertDialog):
         dbg("capture accel", accel, "conflicts", [n for n, _ in self.conflicts])
         self.set_response_enabled("set", True)
         self.set_default_response("set")
-        if self.conflicts:
+        if self.own and parse_accel(accel) in self.own[1:]:
+            self.conflicts = []
+            self.set_message("Already set for this action")
+            self.set_response_label("set", "Set")
+        elif self.conflicts:
             names = ", ".join(sorted({n for n, _ in self.conflicts}))
             self.set_message(f"Already used by {names}", "warning")
             self.set_response_label("set", "Replace")
@@ -1788,6 +1832,8 @@ class ShortcutRow(Adw.ActionRow):
         dbg("row", self.name, "store", repr(accel))
         if self.strv:
             rest = self.accels()[1:]
+            new = parse_accel(accel)
+            rest = [a for a in rest if new is None or parse_accel(a) != new]
             self.st.set_strv(self.key, ([accel] if accel else []) + rest)
         else:
             self.st.set_string(self.key, accel or "")
@@ -1799,7 +1845,8 @@ class ShortcutRow(Adw.ActionRow):
                 for remove in removals:
                     remove()
                 self.store(result)
-        ShortcutCaptureDialog(self.name, done, (self.st, self.key)).present(self.get_root())
+        ShortcutCaptureDialog(self.name, done, (self.st, self.key),
+                              self.accels()).present(self.get_root())
 
 
 def shortcut_row(title, schema, key):
@@ -1854,7 +1901,7 @@ def app_launch_command(app):
     """Command that starts a Gio.AppInfo: gtk-launch when available, else its
     commandline without desktop-entry field codes."""
     app_id = app.get_id()
-    if app_id and GLib.find_program_in_path("gtk-launch"):
+    if app_id and have("gtk-launch"):
         return "gtk-launch " + (app_id[:-8] if app_id.endswith(".desktop") else app_id)
     cmd = app.get_commandline() or ""
     return re.sub(r"\s+", " ", re.sub(r"%[UuFfick]", "", cmd)).strip()
@@ -2541,7 +2588,7 @@ def read_ntp():
     if not have("timedatectl"):
         return None
     try:
-        out = subprocess.run(["timedatectl", "show", "-p", "NTP", "--value"],
+        out = subprocess.run(host_argv(["timedatectl", "show", "-p", "NTP", "--value"]),
                              capture_output=True, text=True, timeout=3).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         return None
@@ -2571,7 +2618,7 @@ def ntp_row(window):
         want = r.get_active()
         try:
             proc = Gio.Subprocess.new(
-                ["timedatectl", "set-ntp", "true" if want else "false"],
+                host_argv(["timedatectl", "set-ntp", "true" if want else "false"]),
                 Gio.SubprocessFlags.STDERR_PIPE)
         except GLib.Error as e:
             revert(not want)
@@ -2603,7 +2650,7 @@ def list_regions():
     if not have("locale"):
         return None
     try:
-        out = subprocess.run(["locale", "-a"], capture_output=True, text=True,
+        out = subprocess.run(host_argv(["locale", "-a"]), capture_output=True, text=True,
                              timeout=5).stdout
     except (OSError, subprocess.SubprocessError):
         return None
@@ -2722,7 +2769,7 @@ def gdm_keyfile(state):
 
 def gdm_profile(include_defaults=None):
     if include_defaults is None:
-        include_defaults = os.path.exists(GDM_GREETER_DEFAULTS)
+        include_defaults = os.path.exists(host_path(GDM_GREETER_DEFAULTS))
     text = "user-db:user\nsystem-db:gdm\n"
     if include_defaults:
         text += f"file-db:{GDM_GREETER_DEFAULTS}\n"
@@ -2750,7 +2797,7 @@ def parse_gdm_conf(text):
 def initial_gdm_state():
     """Values from our drop-in if present, else the user's own settings."""
     try:
-        with open(GDM_CONF, encoding="utf-8") as fh:
+        with open(host_path(GDM_CONF), encoding="utf-8") as fh:
             saved = parse_gdm_conf(fh.read())
     except OSError:
         saved = {}
@@ -2927,6 +2974,8 @@ class MainWindow(Adw.ApplicationWindow):
         self.sidebar.add_css_class("navigation-sidebar")
         self.pages = []
         for p_cls in PAGES:
+            if IN_FLATPAK and p_cls is DefaultAppsPage:
+                continue  # Gio.AppInfo only sees sandboxed apps in Flatpak
             pg = p_cls(self)
             if pg.n_groups == 0:
                 continue  # nothing supported on this system
@@ -2936,7 +2985,8 @@ class MainWindow(Adw.ApplicationWindow):
             row = Gtk.ListBoxRow()
             box = Gtk.Box(spacing=12, margin_top=10, margin_bottom=10,
                           margin_start=6, margin_end=6)
-            box.append(Gtk.Image(icon_name=pg.get_icon_name()))
+            box.append(Gtk.Image(gicon=Gio.ThemedIcon.new_from_names(
+                [pg.get_icon_name(), "application-x-executable-symbolic"])))
             box.append(Gtk.Label(label=pg.get_title(), xalign=0))
             row.set_child(box)
             self.sidebar.append(row)
@@ -3000,8 +3050,10 @@ class App(Adw.Application):
             developer_name="Hector Aguilar (@haguilar91)",
             developers=["Hector Aguilar (@haguilar91)"],
             comments="The GNOME settings that Settings and Tweaks leave out "
-                     "\u2014 bringing GNOME closer to KDE Plasma.")
-        # TODO: set website, issue_url and license_type once the user chooses them.
+                     "\u2014 bringing GNOME closer to KDE Plasma.",
+            website="https://github.com/haguilar91/SettingsPlus",
+            issue_url="https://github.com/haguilar91/SettingsPlus/issues",
+            license_type=Gtk.License.GPL_3_0)
         dialog.add_credit_section("Built with", ["AI assistance (Claude by Anthropic)"])
         dialog.present(self.props.active_window)
 
@@ -3010,6 +3062,14 @@ class App(Adw.Application):
         win.present()
 
 
-if __name__ == "__main__":
+def main(argv=None):
+    argv = sys.argv if argv is None else argv
+    if "--version" in argv[1:]:
+        print(f"Settings Plus {VERSION}")
+        return 0
     check_versions()
-    sys.exit(App().run(sys.argv))
+    return App().run(argv)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

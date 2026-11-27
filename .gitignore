@@ -1,3 +1,11 @@
 __pycache__/
 *.pyc
 .claude/settings.local.json
+dist/
+build/
+.flatpak-builder/
+*.snap
+*.AppImage
+*.flatpak
+build-dir/
+repo/

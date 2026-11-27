@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Settings Plus
+Comment=GNOME settings missing from Settings and Tweaks
+Exec=settings-plus
+Icon=${SNAP}/meta/gui/icon.svg
+Categories=GNOME;GTK;Settings;
+Keywords=settings;tweaks;kde;lid;startup;shortcuts;
+StartupNotify=true
