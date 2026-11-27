@@ -31,6 +31,14 @@ import subprocess
 import sys
 import traceback
 
+APP_ID = "io.github.settingsplus"
+VERSION = "0.1.0"
+
+# Answer --version before importing GTK so it works without the typelibs.
+if __name__ == "__main__" and any(_a in ("--version", "-V") for _a in sys.argv[1:]):
+    print(f"Settings Plus {VERSION}")
+    sys.exit(0)
+
 try:
     import gi
 
@@ -71,8 +79,6 @@ def check_versions():
         sys.exit(1)
 
 
-APP_ID = "io.github.settingsplus"
-VERSION = "0.1.0"
 GLib.set_prgname(APP_ID)
 LOGIND_DROPIN = "/etc/systemd/logind.conf.d/50-settings-plus.conf"
 # Inside Flatpak, GLib.get_user_config_dir() points into the sandbox; the

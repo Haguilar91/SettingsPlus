@@ -1,6 +1,6 @@
 #!/bin/sh
 # Removes exactly what install.sh adds.
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
 apps="$HOME/.local/share/applications"
 rm -rf "$HOME/.local/share/settings-plus"
 rm -f "$apps/io.github.settingsplus.desktop" \

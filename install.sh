@@ -1,7 +1,7 @@
 #!/bin/sh
 # Installs Settings Plus for the current user (no root needed).
 set -e
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
 
 PY=
 for cand in /usr/bin/python3 "$(command -v python3 2>/dev/null)"; do
