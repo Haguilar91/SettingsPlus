@@ -1,0 +1,111 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck appstream desktop-file-utils
+      - name: Python syntax
+        run: python3 -m py_compile settings_plus.py packaging/zipapp_main.py
+      - name: ShellCheck
+        run: shellcheck --severity=warning install.sh uninstall.sh packaging/settings-plus packaging/appimage/AppRun
+      - name: Desktop files
+        run: |
+          sed -e 's|@PYTHON@|python3|' -e 's|%h|/home/user|' io.github.settingsplus.desktop > /tmp/root.desktop
+          desktop-file-validate /tmp/root.desktop
+          desktop-file-validate packaging/io.github.settingsplus.desktop
+      - name: AppStream metadata
+        run: appstreamcli validate --no-net data/io.github.settingsplus.metainfo.xml
+
+  executable:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build zipapp and tarball
+        run: make zipapp tarball
+      - name: Check zipapp
+        run: python3 dist/settings-plus --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: executable
+          path: dist/*
+          if-no-files-found: error
+
+  appimage:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      # appimagetool is a pinned release run with --appimage-extract-and-run
+      # (see Makefile), so FUSE is not needed. The resulting image depends on
+      # host GTK 4, libadwaita and PyGObject.
+      - name: Build AppImage
+        run: make appimage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appimage
+          path: dist/*.AppImage
+          if-no-files-found: error
+
+  flatpak:
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: settings-plus.flatpak
+          manifest-path: packaging/flatpak/io.github.settingsplus.yml
+          cache-key: flatpak-builder-${{ github.sha }}
+
+  snap:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: snapcore/action-build@v1
+        id: build
+        with:
+          path: .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snap
+          path: ${{ steps.build.outputs.snap }}
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [check, executable, appimage, flatpak, snap]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: List artifacts
+        run: ls -lR artifacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/*

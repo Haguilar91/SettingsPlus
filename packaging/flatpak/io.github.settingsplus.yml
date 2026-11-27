@@ -1,0 +1,45 @@
+# GNOME 51 is the current runtime on Flathub (checked 2026-11-26).
+# Host commands (pkexec, systemctl, timedatectl, ...) run through
+# flatpak-spawn --host, which needs --talk-name=org.freedesktop.Flatpak.
+# Flathub itself rejects that permission, so this manifest is meant for
+# self-hosted bundles/repos rather than a Flathub submission.
+# org.gnome.Platform already ships the dconf GIO module and PyGObject.
+app-id: io.github.settingsplus
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
+command: settings-plus
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --talk-name=org.freedesktop.Flatpak
+  - --talk-name=ca.desrt.dconf
+  - --filesystem=xdg-run/dconf
+  - --filesystem=~/.config/dconf:rw
+  - --env=DCONF_USER_CONFIG_DIR=.config/dconf
+  - --env=GSETTINGS_BACKEND=dconf
+  - --filesystem=host-os:ro
+  - --filesystem=host-etc:ro
+  - --filesystem=xdg-config/autostart:create
+  # Host schemas so mutter/shell/nautilus keys exist.
+  - --env=GSETTINGS_SCHEMA_DIR=/run/host/usr/share/glib-2.0/schemas
+modules:
+  - name: settings-plus
+    buildsystem: simple
+    build-commands:
+      - install -Dm644 settings_plus.py /app/share/settings-plus/settings_plus.py
+      - install -Dm755 packaging/settings-plus /app/bin/settings-plus
+      - install -Dm644 packaging/io.github.settingsplus.desktop /app/share/applications/io.github.settingsplus.desktop
+      - install -Dm644 data/io.github.settingsplus.metainfo.xml /app/share/metainfo/io.github.settingsplus.metainfo.xml
+      - install -Dm644 icons/io.github.settingsplus.svg /app/share/icons/hicolor/scalable/apps/io.github.settingsplus.svg
+      - install -Dm644 icons/io.github.settingsplus-symbolic.svg /app/share/icons/hicolor/symbolic/apps/io.github.settingsplus-symbolic.svg
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - .git
+          - dist
+          - build
+          - .flatpak-builder

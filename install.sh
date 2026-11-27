@@ -22,6 +22,7 @@ d="$HOME/.local/share/settings-plus"
 apps="$HOME/.local/share/applications"
 icons="$HOME/.local/share/icons/hicolor/scalable/apps"
 sym="$HOME/.local/share/icons/hicolor/symbolic/apps"
+meta="$HOME/.local/share/metainfo"
 mkdir -p "$d" "$apps" "$icons" "$sym"
 cp settings_plus.py "$d/"
 cp icons/io.github.settingsplus.svg "$icons/"
@@ -29,6 +30,7 @@ cp icons/io.github.settingsplus-symbolic.svg "$sym/"
 rm -f "$apps/settings-plus.desktop"
 sed -e "s|%h|$HOME|" -e "s|@PYTHON@|$PY|" io.github.settingsplus.desktop \
     > "$apps/io.github.settingsplus.desktop"
+[ -f data/io.github.settingsplus.metainfo.xml ] && { mkdir -p "$meta" && cp data/io.github.settingsplus.metainfo.xml "$meta/" || true; }
 gtk-update-icon-cache -q -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
 update-desktop-database "$apps" 2>/dev/null || true
 echo "Installed using $PY. Launch 'Settings Plus' from the app grid."

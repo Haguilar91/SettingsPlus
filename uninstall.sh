@@ -7,6 +7,7 @@ rm -f "$apps/io.github.settingsplus.desktop" \
       "$apps/settings-plus.desktop" \
       "$HOME/.local/share/icons/hicolor/scalable/apps/io.github.settingsplus.svg" \
       "$HOME/.local/share/icons/hicolor/symbolic/apps/io.github.settingsplus-symbolic.svg"
+rm -f "$HOME/.local/share/metainfo/io.github.settingsplus.metainfo.xml" || true
 gtk-update-icon-cache -q -t "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
 update-desktop-database "$apps" 2>/dev/null || true
 echo "Settings Plus removed."

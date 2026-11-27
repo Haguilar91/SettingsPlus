@@ -1,0 +1,35 @@
+name: settings-plus
+title: Settings Plus
+base: core24
+adopt-info: settings-plus   # version is read from VERSION in settings_plus.py
+summary: The GNOME settings that Settings and Tweaks leave out
+description: |
+  Settings Plus is a GTK 4 / libadwaita app adding power, shortcut, startup,
+  appearance, login screen and other settings missing from GNOME Settings and
+  Tweaks. It needs GTK 4, libadwaita and PyGObject from the host (GNOME 46+).
+license: GPL-3.0-or-later
+website: https://github.com/haguilar91/SettingsPlus
+source-code: https://github.com/haguilar91/SettingsPlus
+issues: https://github.com/haguilar91/SettingsPlus/issues
+icon: icons/io.github.settingsplus.svg
+grade: stable
+# Classic confinement is required: the app runs pkexec, systemctl, timedatectl
+# and dconf on the host, reads/writes /etc (logind drop-ins, GDM dconf) and
+# uses the host's GTK 4, libadwaita and PyGObject through /usr/bin/python3
+# instead of bundling a GNOME stack.
+confinement: classic
+
+apps:
+  settings-plus:
+    command: bin/settings-plus
+
+parts:
+  settings-plus:
+    plugin: nil
+    source: .
+    override-pull: |
+      craftctl default
+      craftctl set version="$(sed -n 's/^VERSION = "\(.*\)"/\1/p' settings_plus.py)"
+    override-build: |
+      install -Dm644 settings_plus.py "$CRAFT_PART_INSTALL/share/settings-plus/settings_plus.py"
+      install -Dm755 packaging/settings-plus "$CRAFT_PART_INSTALL/bin/settings-plus"
