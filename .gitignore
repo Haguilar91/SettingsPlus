@@ -7,3 +7,5 @@ build/
 *.snap
 *.AppImage
 *.flatpak
+build-dir/
+repo/
